@@ -105,7 +105,7 @@ footer{padding:0 0 48px;font-size:12px;color:var(--muted-foreground)}
 <div class="card summary">
 <div class="stat-row"><span>閲覧済み</span><span class="stat"><span id="seenCount">0</span> / 3,162 · <span id="pct">0%</span></span></div>
 <div class="progress"><i></i></div>
-<button id="resume" class="btn" type="button"><span id="resumeLabel">最初から見る</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+<button id="resume" class="btn" type="button"><span id="resumeLabel">続きから見る  #0001</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
 </div>
 </header>
 <div class="tabs-bar"><div class="container bar-inner">
@@ -123,7 +123,8 @@ footer{padding:0 0 48px;font-size:12px;color:var(--muted-foreground)}
 <script>
 document.documentElement.classList.remove('no-js');document.documentElement.classList.add('js');
 (function(){
-  var U=document.body.dataset.user, KEY='seen-'+U, FKEY='flags-'+U, VKEY='view-'+U, seen={}, flags={};
+  var U=document.body.dataset.user, KEY='seen-'+U, FKEY='flags-'+U, VKEY='view-'+U, LKEY='last-'+U, seen={}, flags={}, lastId=null;
+  try{lastId=localStorage.getItem(LKEY)}catch(e){}
   try{seen=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
   try{flags=JSON.parse(localStorage.getItem(FKEY)||'{}')}catch(e){}
   var items=[].slice.call(document.querySelectorAll('#all li[data-id]')), total=items.length;
@@ -144,6 +145,14 @@ document.documentElement.classList.remove('no-js');document.documentElement.clas
       var c=li.cloneNode(true);c.classList.remove('flash');ol.appendChild(c);
     });
   }
+  // 続き＝最後に開いた投稿より後で、まだ見ていない最初の投稿（なければ未読の一番古い投稿）
+  function nextItem(){
+    var start=0;
+    if(lastId){for(var i=0;i<items.length;i++){if(items[i].dataset.id===lastId){start=seen[lastId]?i+1:i;break}}}
+    for(var j=start;j<items.length;j++){if(!seen[items[j].dataset.id])return items[j]}
+    for(var k=0;k<start;k++){if(!seen[items[k].dataset.id])return items[k]}
+    return null;
+  }
   function update(){
     var count=0, perYear={};
     items.forEach(function(li){paint(li);var on=!!seen[li.dataset.id];var y=li.closest('.year').id.slice(1);perYear[y]=(perYear[y]||0)+(on?1:0);if(on)count++});
@@ -151,8 +160,8 @@ document.documentElement.classList.remove('no-js');document.documentElement.clas
     document.getElementById('pct').textContent=Math.floor(count/total*100)+'%';
     document.querySelector('.progress i').style.width=(count/total*100)+'%';
     document.querySelectorAll('.yseen').forEach(function(s){var n=perYear[s.dataset.y]||0;s.textContent=n?fmt(n):''});
-    var next=items.findIndex(function(li){return !seen[li.dataset.id]});
-    document.getElementById('resumeLabel').textContent=count===0?'最初から見る':next<0?'すべて見ました':'続きから見る  #'+String(next+1).padStart(4,'0');
+    var next=items.indexOf(nextItem());
+    document.getElementById('resumeLabel').textContent=next<0?'すべて見ました':'続きから見る  #'+String(next+1).padStart(4,'0');
     renderFlags();
   }
   // 見た・フラグ・リンクのクリック（フラグ集の中の複製にも効くよう、まとめて受け取る）
@@ -160,7 +169,7 @@ document.documentElement.classList.remove('no-js');document.documentElement.clas
     var li=e.target.closest&&e.target.closest('li[data-id]'); if(!li)return; var id=li.dataset.id;
     if(e.target.closest('.check')){if(seen[id])delete seen[id];else seen[id]=1}
     else if(e.target.closest('.flag')){if(flags[id]){delete flags[id];toast('フラグを外しました')}else{flags[id]=Date.now();toast('フラグを付けました')}}
-    else if(e.target.closest('.row')){seen[id]=1}
+    else if(e.target.closest('.row')){seen[id]=1;lastId=id;try{localStorage.setItem(LKEY,id)}catch(err){}}
     else return;
     save(); setTimeout(update,0);
   });
@@ -172,7 +181,7 @@ document.documentElement.classList.remove('no-js');document.documentElement.clas
   document.querySelectorAll('.seg button').forEach(function(b){b.addEventListener('click',function(){setView(b.dataset.view);window.scrollTo(0,document.querySelector('.tabs-bar').offsetTop)})});
   function reveal(el){var d=el.closest('details');while(d){d.open=true;d=d.parentElement.closest('details')}}
   document.getElementById('resume').addEventListener('click',function(){
-    var li=items.find(function(li){return !seen[li.dataset.id]}); if(!li)return;
+    var li=nextItem(); if(!li)return;
     setView('all'); reveal(li); li.scrollIntoView({block:'center',behavior:'smooth'});
     li.classList.remove('flash'); void li.offsetWidth; li.classList.add('flash');
   });
